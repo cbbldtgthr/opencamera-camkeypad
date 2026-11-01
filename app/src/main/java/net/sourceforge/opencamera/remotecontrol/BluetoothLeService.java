@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothStatusCodes;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -47,6 +48,8 @@ public class BluetoothLeService extends Service {
     private final Handler bluetoothHandler = new Handler();
     private final HashMap<String, BluetoothGattCharacteristic> subscribed_characteristics = new HashMap<>();
     private final List<BluetoothGattCharacteristic> charsToSubscribe = new ArrayList<>();
+    // camkeypad: characteristic we write recording status to, set once services are discovered
+    private volatile BluetoothGattCharacteristic camkeypad_status_char;
 
     private double currentTemp = -1;
     private double currentDepth = -1;
@@ -79,6 +82,8 @@ public class BluetoothLeService extends Service {
     public final static int COMMAND_AFMF = 97;
     public final static int COMMAND_UP = 64;
     public final static int COMMAND_DOWN = 80;
+
+    public final static String REMOTE_TYPE_CAMKEYPAD = "preference_remote_type_camkeypad";
 
     /* This forces a gratuitous BLE scan to help the device
      * connect to the remote faster. This is due to limitations of the
@@ -160,6 +165,7 @@ public class BluetoothLeService extends Service {
                 intentAction = ACTION_GATT_DISCONNECTED;
                 if( MyDebug.LOG )
                     Log.d(TAG, "Disconnected from GATT server, reattempting every 5 seconds.");
+                camkeypad_status_char = null;
                 broadcastUpdate(intentAction);
                 attemptReconnect();
             }
@@ -227,6 +233,18 @@ public class BluetoothLeService extends Service {
     private void subscribeToServices() {
         List<BluetoothGattService> gattServices = getSupportedGattServices();
         if (gattServices == null) return;
+
+        if( REMOTE_TYPE_CAMKEYPAD.equals(remote_device_type) ) {
+            // camkeypad sends keys as plain HID; we only write status to it, nothing to subscribe to
+            BluetoothGattService service = bluetoothGatt.getService(CamKeypadProtocol.SERVICE_UUID);
+            camkeypad_status_char = service == null ? null : service.getCharacteristic(CamKeypadProtocol.STATUS_CHAR_UUID);
+            if( camkeypad_status_char == null )
+                Log.e(TAG, "camkeypad status characteristic not found");
+            else if( MyDebug.LOG )
+                Log.d(TAG, "Found camkeypad status characteristic");
+            return;
+        }
+
         List<UUID> mCharacteristicsWanted;
 
         //noinspection SwitchStatementWithTooFewBranches
@@ -469,7 +487,10 @@ public class BluetoothLeService extends Service {
         // for them first, even when connecting by explicit MAC address. Since we're using
         // BLE for underwater housings and we want rock solid connectivity, we trigger
         // a scan for 10 seconds
-        triggerScan();
+        // Not for camkeypad: it is bonded as a keyboard, so usually already connected and not
+        // advertising.
+        if( !REMOTE_TYPE_CAMKEYPAD.equals(remote_device_type) )
+            triggerScan();
 
         bluetoothGatt = device.connectGatt(this, true, mGattCallback);
         device_address = address;
@@ -525,6 +546,32 @@ public class BluetoothLeService extends Service {
         BluetoothGattDescriptor descriptor = characteristic.getDescriptor(KrakenGattAttributes.CLIENT_CHARACTERISTIC_CONFIG);
         descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
         bluetoothGatt.writeDescriptor(descriptor);
+    }
+
+    /** Writes a camkeypad status payload (see CamKeypadProtocol.encodeStatus()) without response.
+     * @return true if the write was queued; false if not connected or the stack is busy, in which
+     *         case the caller should try again later.
+     */
+    public boolean writeCamKeypadStatus(byte[] value) {
+        BluetoothGattCharacteristic characteristic = camkeypad_status_char;
+        BluetoothGatt gatt = bluetoothGatt;
+        if( characteristic == null || gatt == null )
+            return false;
+
+        // Check for Android 12 Bluetooth permission just in case (and for Android lint error)
+        if( ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED ) {
+            Log.e(TAG, "bluetooth connect permission not granted!");
+            return false;
+        }
+
+        if( Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ) {
+            return gatt.writeCharacteristic(characteristic, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) == BluetoothStatusCodes.SUCCESS;
+        }
+        else {
+            characteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+            characteristic.setValue(value);
+            return gatt.writeCharacteristic(characteristic);
+        }
     }
 
     private List<BluetoothGattService> getSupportedGattServices() {

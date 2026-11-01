@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
@@ -21,6 +22,7 @@ import net.sourceforge.opencamera.MainActivity;
 import net.sourceforge.opencamera.MyApplicationInterface;
 import net.sourceforge.opencamera.MyDebug;
 import net.sourceforge.opencamera.PreferenceKeys;
+import net.sourceforge.opencamera.preview.Preview;
 import net.sourceforge.opencamera.ui.MainUI;
 
 /** Class for handling the Bluetooth LE remote control functionality.
@@ -70,6 +72,8 @@ public class BluetoothRemoteControl {
                 Log.e(TAG, "Unable to initialize Bluetooth");
                 stopRemoteControl();
             }
+            // set the type before connecting, as connect() and service discovery depend on it
+            bluetoothLeService.setRemoteDeviceType(remoteDeviceType);
             // connect to the device
             bluetoothLeService.connect(remoteDeviceAddress);
         }
@@ -130,7 +134,11 @@ public class BluetoothRemoteControl {
                 if( MyDebug.LOG )
                     Log.d(TAG, "Remote disconnected");
                 is_connected = false;
-                applicationInterface.getDrawPreview().onExtraOSDValuesChanged("-- \u00B0C", "-- m");
+                stopCamKeypadStatus();
+                if( !isCamKeypad() ) {
+                    // camkeypad has no sensors, so don't show the Kraken OSD lines
+                    applicationInterface.getDrawPreview().onExtraOSDValuesChanged("-- \u00B0C", "-- m");
+                }
                 mainUI.updateRemoteConnectionIcon();
                 main_activity.setBrightnessToMinimumIfWanted();
                 if (mainUI.isExposureUIOpen())
@@ -144,6 +152,8 @@ public class BluetoothRemoteControl {
                 // icon
                 is_connected = true;
                 mainUI.updateRemoteConnectionIcon();
+                if( isCamKeypad() )
+                    startCamKeypadStatus();
             }
             else if( BluetoothLeService.ACTION_SENSOR_VALUE.equals(action) ) {
                 double temp = intent.getDoubleExtra(BluetoothLeService.SENSOR_TEMPERATURE, -1);
@@ -242,6 +252,69 @@ public class BluetoothRemoteControl {
         return is_connected;
     }
 
+    private boolean isCamKeypad() {
+        return BluetoothLeService.REMOTE_TYPE_CAMKEYPAD.equals(remoteDeviceType);
+    }
+
+    /* camkeypad status push. Rather than hooking every place video can start, stop or pause
+     * (including stops Open Camera makes on its own, e.g. max filesize or errors), we poll the
+     * Preview's state and write as soon as it changes, plus a heartbeat so the pad can tell a
+     * live link from a stale one.
+     */
+    private static final long CAMKEYPAD_POLL_MS = 250;
+    private final Handler camkeypadHandler = new Handler(Looper.getMainLooper());
+    private int camkeypad_sent_state = -1; // last state successfully written, or -1 for none
+    private long camkeypad_sent_time; // System.currentTimeMillis() of the last successful write
+
+    private final Runnable camkeypadStatusTick = new Runnable() {
+        @Override
+        public void run() {
+            pushCamKeypadStatus();
+            camkeypadHandler.postDelayed(this, CAMKEYPAD_POLL_MS);
+        }
+    };
+
+    private void startCamKeypadStatus() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "startCamKeypadStatus");
+        camkeypadHandler.removeCallbacks(camkeypadStatusTick);
+        camkeypad_sent_state = -1;
+        camkeypadHandler.post(camkeypadStatusTick);
+    }
+
+    private void stopCamKeypadStatus() {
+        camkeypadHandler.removeCallbacks(camkeypadStatusTick);
+    }
+
+    private void pushCamKeypadStatus() {
+        if( bluetoothLeService == null || !DeviceScanner.useAndroid12BluetoothPermissions() )
+            return;
+        Preview preview = main_activity.getPreview();
+        if( preview == null )
+            return;
+
+        int state;
+        long elapsed_ms = 0;
+        if( !preview.isVideoRecording() ) {
+            state = CamKeypadProtocol.STATE_IDLE;
+        }
+        else {
+            state = preview.isVideoRecordingPaused() ? CamKeypadProtocol.STATE_PAUSED : CamKeypadProtocol.STATE_RECORDING;
+            elapsed_ms = preview.getVideoTime(false);
+        }
+
+        long now = System.currentTimeMillis();
+        if( state == camkeypad_sent_state && now - camkeypad_sent_time < CamKeypadProtocol.HEARTBEAT_MS )
+            return;
+        // if the write fails (e.g., stack busy), we leave the sent state alone so the next tick retries
+        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms)) ) {
+            if( MyDebug.LOG && state != camkeypad_sent_state )
+                Log.d(TAG, "camkeypad state now " + state);
+            camkeypad_sent_state = state;
+            camkeypad_sent_time = now;
+        }
+    }
+
     // TODO: refactor for a filter than receives generic remote control intents
     @RequiresApi(api = Build.VERSION_CODES.S)
     private static IntentFilter makeRemoteCommandIntentFilter() {
@@ -293,6 +366,7 @@ public class BluetoothRemoteControl {
                 main_activity.unregisterReceiver(remoteControlCommandReceiver);
                 main_activity.unbindService(mServiceConnection);
                 is_connected = false; // Unbinding closes the connection, of course
+                stopCamKeypadStatus();
                 main_activity.getMainUI().updateRemoteConnectionIcon();
             }
             catch(IllegalArgumentException e){
@@ -311,6 +385,7 @@ public class BluetoothRemoteControl {
                 main_activity.unregisterReceiver(remoteControlCommandReceiver);
                 main_activity.unbindService(mServiceConnection);
                 is_connected = false; // Unbinding closes the connection, of course
+                stopCamKeypadStatus();
                 main_activity.getMainUI().updateRemoteConnectionIcon();
             }
             catch(IllegalArgumentException e){

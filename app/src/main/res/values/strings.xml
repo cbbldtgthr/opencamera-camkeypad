@@ -801,6 +801,7 @@
     <string name="remote_connected">Remote connected</string>
 
     <string name="preference_remote_type_kraken" translatable="false">Kraken</string>
+    <string name="preference_remote_type_camkeypad" translatable="false">camkeypad</string>
     <!-- package hosting DeviceScanner; overridden for builds with an applicationIdSuffix -->
     <string name="remote_scanner_package" translatable="false">net.sourceforge.opencamera</string>
 

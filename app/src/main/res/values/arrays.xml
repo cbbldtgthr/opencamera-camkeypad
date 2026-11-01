@@ -897,9 +897,11 @@
     </string-array>
     <string-array name="preference_remote_type_entries">
         <item>@string/preference_remote_type_kraken</item>
+        <item>@string/preference_remote_type_camkeypad</item>
     </string-array>
     <string-array name="preference_remote_type_values">
         <item>preference_remote_type_kraken</item>
+        <item>preference_remote_type_camkeypad</item>
     </string-array>
     <string-array name="preference_remote_video_mode_entries">
         <item>@string/preference_remote_video_mode_standard</item>

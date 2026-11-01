@@ -389,6 +389,17 @@ public class DeviceScanner extends AppCompatActivity {
                 }
             }, 10000);
 
+            // Also list bonded LE devices: a remote that is already connected (e.g. camkeypad,
+            // bonded as a keyboard) usually stops advertising, so the scan won't find it.
+            if( ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED ) {
+                for(BluetoothDevice device : bluetoothAdapter.getBondedDevices()) {
+                    if( device.getType() == BluetoothDevice.DEVICE_TYPE_LE || device.getType() == BluetoothDevice.DEVICE_TYPE_DUAL ) {
+                        leDeviceListAdapter.addDevice(device);
+                    }
+                }
+                leDeviceListAdapter.notifyDataSetChanged();
+            }
+
             is_scanning = true;
             bluetoothAdapter.startLeScan(mLeScanCallback);
         }
