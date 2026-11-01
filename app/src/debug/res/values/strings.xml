@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- camkeypad fork: tell it apart from the store Open Camera in the launcher -->
+    <string name="app_name" translatable="false">Open Camera (camkeypad)</string>
+    <string name="remote_scanner_package" translatable="false">net.sourceforge.opencamera.camkeypad</string>
+</resources>

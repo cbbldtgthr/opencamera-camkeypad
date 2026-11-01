@@ -25,7 +25,7 @@
         >
 
         <intent
-            android:targetPackage="net.sourceforge.opencamera"
+            android:targetPackage="@string/remote_scanner_package"
             android:targetClass="net.sourceforge.opencamera.remotecontrol.DeviceScanner"
             />
 

@@ -16,6 +16,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // camkeypad fork: install alongside the store Open Camera
+            applicationIdSuffix ".camkeypad"
+            versionNameSuffix "-camkeypad"
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.txt'
