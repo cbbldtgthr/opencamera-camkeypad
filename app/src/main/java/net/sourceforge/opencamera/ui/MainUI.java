@@ -2676,6 +2676,49 @@ public class MainUI {
                 main_activity.zoomOut();
                 return true;
             }
+            case KeyEvent.KEYCODE_F7: // camkeypad start/stop
+            {
+                if( event.getRepeatCount() == 0 ) {
+                    main_activity.takePicture(false);
+                }
+                return true;
+            }
+            case KeyEvent.KEYCODE_F8: // camkeypad pause/resume
+            {
+                if( event.getRepeatCount() == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ) {
+                    main_activity.pauseVideo();
+                }
+                return true;
+            }
+            case KeyEvent.KEYCODE_F10: // camkeypad exposure encoder
+            case KeyEvent.KEYCODE_F11:
+            {
+                if( main_activity.getPreview().getCameraController() != null ) {
+                    int change = keyCode == KeyEvent.KEYCODE_F10 ? 1 : -1;
+                    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(main_activity);
+                    String value = sharedPreferences.getString(PreferenceKeys.ISOPreferenceKey, CameraController.ISO_DEFAULT);
+                    if( value.equals(CameraController.ISO_DEFAULT) )
+                        main_activity.changeExposure(change);
+                    else
+                        main_activity.changeISO(change);
+                }
+                return true;
+            }
+            case KeyEvent.KEYCODE_F9: // camkeypad exposure compensation reset
+            {
+                if( main_activity.getPreview().getCameraController() != null && main_activity.getPreview().supportsExposures() ) {
+                    SeekBar seekBar = main_activity.findViewById(R.id.exposure_seekbar);
+                    seekBar.setProgress(main_activity.getExposureSeekbarProgressZero());
+                }
+                return true;
+            }
+            case KeyEvent.KEYCODE_F12: // camkeypad exposure encoder click
+            {
+                if( event.getRepeatCount() == 0 && main_activity.getPreview().getCameraController() != null && main_activity.getPreview().supportsExposureLock() ) {
+                    getOnScreenIcons().clickedExposureLock();
+                }
+                return true;
+            }
             case KeyEvent.KEYCODE_SPACE:
             case KeyEvent.KEYCODE_NUMPAD_5:
             {
