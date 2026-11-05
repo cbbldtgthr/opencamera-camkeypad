@@ -7694,6 +7694,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         return this.max_exposure;
     }
 
+    public float getExposureStep() {
+        return this.exposure_step;
+    }
+
     public int getCurrentExposure() {
         if( MyDebug.LOG )
             Log.d(TAG, "getCurrentExposure");

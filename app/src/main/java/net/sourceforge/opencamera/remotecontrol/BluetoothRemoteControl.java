@@ -264,9 +264,8 @@ public class BluetoothRemoteControl {
      */
     private static final long CAMKEYPAD_POLL_MS = 250;
     private final Handler camkeypadHandler = new Handler(Looper.getMainLooper());
-    private int camkeypad_sent_state = -1; // last state successfully written, or -1 for none
-    private int camkeypad_sent_mode = -1; // last mode successfully written, or -1 for none
-    private long camkeypad_sent_time; // System.currentTimeMillis() of the last successful write
+    private int camkeypad_sent_summary; // hash of what was last successfully written, apart from the time
+    private long camkeypad_sent_time; // System.currentTimeMillis() of the last successful write, or 0 for none
 
     private final Runnable camkeypadStatusTick = new Runnable() {
         @Override
@@ -280,7 +279,7 @@ public class BluetoothRemoteControl {
         if( MyDebug.LOG )
             Log.d(TAG, "startCamKeypadStatus");
         camkeypadHandler.removeCallbacks(camkeypadStatusTick);
-        camkeypad_sent_state = -1;
+        camkeypad_sent_time = 0;
         camkeypadHandler.post(camkeypadStatusTick);
     }
 
@@ -307,17 +306,30 @@ public class BluetoothRemoteControl {
 
         int mode = preview.isVideo() ? CamKeypadProtocol.MODE_VIDEO : CamKeypadProtocol.MODE_PHOTO;
 
+        int focus = "focus_mode_manual2".equals(preview.getCurrentFocusValue()) ? CamKeypadProtocol.FOCUS_MANUAL : CamKeypadProtocol.FOCUS_AUTO;
+        int focus_distance_cm = getFocusDistanceCm(preview);
+        int exposure_tenths = Math.round(preview.getCurrentExposure() * preview.getExposureStep() * 10.0f);
+        int exposure_locked = preview.isExposureLocked() ? 1 : 0;
+
+        int summary = java.util.Arrays.hashCode(new int[]{state, mode, focus, focus_distance_cm, exposure_tenths, exposure_locked});
         long now = System.currentTimeMillis();
-        if( state == camkeypad_sent_state && mode == camkeypad_sent_mode && now - camkeypad_sent_time < CamKeypadProtocol.HEARTBEAT_MS )
+        if( summary == camkeypad_sent_summary && now - camkeypad_sent_time < CamKeypadProtocol.HEARTBEAT_MS )
             return;
         // if the write fails (e.g., stack busy), we leave the sent state alone so the next tick retries
-        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms, mode, getPhoneBattery())) ) {
-            if( MyDebug.LOG && (state != camkeypad_sent_state || mode != camkeypad_sent_mode) )
-                Log.d(TAG, "camkeypad state now " + state + " mode " + mode);
-            camkeypad_sent_state = state;
-            camkeypad_sent_mode = mode;
+        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms, mode, getPhoneBattery(), focus, focus_distance_cm, exposure_tenths, exposure_locked)) ) {
+            camkeypad_sent_summary = summary;
             camkeypad_sent_time = now;
         }
+    }
+
+    /** Returns the manual focus distance in centimetres, or CamKeypadProtocol.FOCUS_DISTANCE_CM_INFINITY. */
+    private int getFocusDistanceCm(Preview preview) {
+        if( preview.getCameraController() == null )
+            return CamKeypadProtocol.FOCUS_DISTANCE_CM_INFINITY;
+        float dioptres = preview.getCameraController().getFocusDistance();
+        if( dioptres <= 0.0f )
+            return CamKeypadProtocol.FOCUS_DISTANCE_CM_INFINITY;
+        return Math.max(1, Math.min(65535, Math.round(100.0f / dioptres)));
     }
 
     /** Returns the phone's charge as a percentage, or CamKeypadProtocol.PHONE_BATTERY_UNKNOWN. */

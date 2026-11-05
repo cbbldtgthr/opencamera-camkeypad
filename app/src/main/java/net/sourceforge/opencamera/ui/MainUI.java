@@ -2525,6 +2525,9 @@ public class MainUI {
         }
     }
 
+    /** How far one click of camkeypad's encoder moves the manual focus seekbar, out of 1000. */
+    private static final int CAMKEYPAD_FOCUS_STEP = 20;
+
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if( MyDebug.LOG )
             Log.d(TAG, "onKeyDown: " + keyCode);
@@ -2701,6 +2704,26 @@ public class MainUI {
                         main_activity.changeExposure(change);
                     else
                         main_activity.changeISO(change);
+                }
+                return true;
+            }
+            case KeyEvent.KEYCODE_J: // camkeypad focus farther
+            case KeyEvent.KEYCODE_K: // camkeypad focus nearer
+            {
+                // the encoder does nothing in auto focus, rather than a bump leaving auto focus mid-shot
+                if( "focus_mode_manual2".equals(main_activity.getPreview().getCurrentFocusValue()) ) {
+                    main_activity.changeFocusDistance(keyCode == KeyEvent.KEYCODE_K ? CAMKEYPAD_FOCUS_STEP : -CAMKEYPAD_FOCUS_STEP, false);
+                }
+                return true;
+            }
+            case KeyEvent.KEYCODE_F: // camkeypad auto/manual focus
+            {
+                if( event.getRepeatCount() == 0 && main_activity.getPreview().getCameraController() != null ) {
+                    Preview preview = main_activity.getPreview();
+                    String focus_value = "focus_mode_manual2";
+                    if( focus_value.equals(preview.getCurrentFocusValue()) )
+                        focus_value = preview.isVideo() ? "focus_mode_continuous_video" : "focus_mode_continuous_picture";
+                    preview.updateFocus(focus_value, false, true);
                 }
                 return true;
             }
