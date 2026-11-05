@@ -7,7 +7,7 @@ public final class CamKeypadProtocol {
     private CamKeypadProtocol() {
     }
 
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
 
     public static final UUID SERVICE_UUID = UUID.fromString("1d0d0dc8-5cd6-4d86-b577-af570c2c28c1");
     public static final UUID STATUS_CHAR_UUID = UUID.fromString("18ec2b07-1988-4f4f-a8bd-8f638d214c38");
@@ -16,13 +16,18 @@ public final class CamKeypadProtocol {
     public static final int STATE_RECORDING = 1;
     public static final int STATE_PAUSED = 2;
 
+    public static final int MODE_PHOTO = 0;
+    public static final int MODE_VIDEO = 1;
+
+    public static final int PHONE_BATTERY_UNKNOWN = 255;
+
     public static final long HEARTBEAT_MS = 2000;
     public static final long STALE_AFTER_MS = 5000;
 
-    public static final int STATUS_LEN = 6;
+    public static final int STATUS_LEN = 8;
 
     /** Encode a status write, little-endian. VERSION is filled in. */
-    public static byte[] encodeStatus(int state, long elapsedMs) {
+    public static byte[] encodeStatus(int state, long elapsedMs, int mode, int phoneBattery) {
         byte[] buf = new byte[STATUS_LEN];
         buf[0] = (byte) ((VERSION) & 0xff);
         buf[1] = (byte) ((state) & 0xff);
@@ -30,6 +35,8 @@ public final class CamKeypadProtocol {
         buf[3] = (byte) ((elapsedMs >>> 8) & 0xff);
         buf[4] = (byte) ((elapsedMs >>> 16) & 0xff);
         buf[5] = (byte) ((elapsedMs >>> 24) & 0xff);
+        buf[6] = (byte) ((mode) & 0xff);
+        buf[7] = (byte) ((phoneBattery) & 0xff);
         return buf;
     }
 }

@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -264,6 +265,7 @@ public class BluetoothRemoteControl {
     private static final long CAMKEYPAD_POLL_MS = 250;
     private final Handler camkeypadHandler = new Handler(Looper.getMainLooper());
     private int camkeypad_sent_state = -1; // last state successfully written, or -1 for none
+    private int camkeypad_sent_mode = -1; // last mode successfully written, or -1 for none
     private long camkeypad_sent_time; // System.currentTimeMillis() of the last successful write
 
     private final Runnable camkeypadStatusTick = new Runnable() {
@@ -303,16 +305,28 @@ public class BluetoothRemoteControl {
             elapsed_ms = preview.getVideoTime(false);
         }
 
+        int mode = preview.isVideo() ? CamKeypadProtocol.MODE_VIDEO : CamKeypadProtocol.MODE_PHOTO;
+
         long now = System.currentTimeMillis();
-        if( state == camkeypad_sent_state && now - camkeypad_sent_time < CamKeypadProtocol.HEARTBEAT_MS )
+        if( state == camkeypad_sent_state && mode == camkeypad_sent_mode && now - camkeypad_sent_time < CamKeypadProtocol.HEARTBEAT_MS )
             return;
         // if the write fails (e.g., stack busy), we leave the sent state alone so the next tick retries
-        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms)) ) {
-            if( MyDebug.LOG && state != camkeypad_sent_state )
-                Log.d(TAG, "camkeypad state now " + state);
+        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms, mode, getPhoneBattery())) ) {
+            if( MyDebug.LOG && (state != camkeypad_sent_state || mode != camkeypad_sent_mode) )
+                Log.d(TAG, "camkeypad state now " + state + " mode " + mode);
             camkeypad_sent_state = state;
+            camkeypad_sent_mode = mode;
             camkeypad_sent_time = now;
         }
+    }
+
+    /** Returns the phone's charge as a percentage, or CamKeypadProtocol.PHONE_BATTERY_UNKNOWN. */
+    private int getPhoneBattery() {
+        BatteryManager batteryManager = (BatteryManager) main_activity.getSystemService(Context.BATTERY_SERVICE);
+        if( batteryManager == null )
+            return CamKeypadProtocol.PHONE_BATTERY_UNKNOWN;
+        int percent = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        return percent >= 0 && percent <= 100 ? percent : CamKeypadProtocol.PHONE_BATTERY_UNKNOWN;
     }
 
     // TODO: refactor for a filter than receives generic remote control intents

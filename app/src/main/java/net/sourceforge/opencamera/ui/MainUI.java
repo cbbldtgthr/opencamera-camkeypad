@@ -2704,11 +2704,11 @@ public class MainUI {
                 }
                 return true;
             }
-            case KeyEvent.KEYCODE_F9: // camkeypad exposure compensation reset
+            case KeyEvent.KEYCODE_F9: // camkeypad photo/video switch
             {
-                if( main_activity.getPreview().getCameraController() != null && main_activity.getPreview().supportsExposures() ) {
-                    SeekBar seekBar = main_activity.findViewById(R.id.exposure_seekbar);
-                    seekBar.setProgress(main_activity.getExposureSeekbarProgressZero());
+                // switching mode would stop a recording, and the on-screen switch is hidden then too
+                if( event.getRepeatCount() == 0 && !main_activity.getPreview().isVideoRecording() && !main_activity.getPreview().isTakingPhotoOrOnTimer() ) {
+                    main_activity.clickedSwitchVideo(null);
                 }
                 return true;
             }
