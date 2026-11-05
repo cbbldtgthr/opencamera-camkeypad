@@ -2676,25 +2676,25 @@ public class MainUI {
                 main_activity.zoomOut();
                 return true;
             }
-            case KeyEvent.KEYCODE_F7: // camkeypad start/stop
+            case KeyEvent.KEYCODE_R: // camkeypad start/stop
             {
                 if( event.getRepeatCount() == 0 ) {
                     main_activity.takePicture(false);
                 }
                 return true;
             }
-            case KeyEvent.KEYCODE_F8: // camkeypad pause/resume
+            case KeyEvent.KEYCODE_P: // camkeypad pause/resume
             {
                 if( event.getRepeatCount() == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ) {
                     main_activity.pauseVideo();
                 }
                 return true;
             }
-            case KeyEvent.KEYCODE_F10: // camkeypad exposure encoder
-            case KeyEvent.KEYCODE_F11:
+            case KeyEvent.KEYCODE_L: // camkeypad exposure up
+            case KeyEvent.KEYCODE_H: // camkeypad exposure down
             {
                 if( main_activity.getPreview().getCameraController() != null ) {
-                    int change = keyCode == KeyEvent.KEYCODE_F10 ? 1 : -1;
+                    int change = keyCode == KeyEvent.KEYCODE_L ? 1 : -1;
                     SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(main_activity);
                     String value = sharedPreferences.getString(PreferenceKeys.ISOPreferenceKey, CameraController.ISO_DEFAULT);
                     if( value.equals(CameraController.ISO_DEFAULT) )
@@ -2704,7 +2704,7 @@ public class MainUI {
                 }
                 return true;
             }
-            case KeyEvent.KEYCODE_F9: // camkeypad photo/video switch
+            case KeyEvent.KEYCODE_M: // camkeypad photo/video switch
             {
                 // switching mode would stop a recording, and the on-screen switch is hidden then too
                 if( event.getRepeatCount() == 0 && !main_activity.getPreview().isVideoRecording() && !main_activity.getPreview().isTakingPhotoOrOnTimer() ) {
@@ -2712,7 +2712,7 @@ public class MainUI {
                 }
                 return true;
             }
-            case KeyEvent.KEYCODE_F12: // camkeypad exposure encoder click
+            case KeyEvent.KEYCODE_E: // camkeypad exposure lock
             {
                 if( event.getRepeatCount() == 0 && main_activity.getPreview().getCameraController() != null && main_activity.getPreview().supportsExposureLock() ) {
                     getOnScreenIcons().clickedExposureLock();
