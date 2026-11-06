@@ -2527,6 +2527,37 @@ public class MainUI {
 
     /** How far one click of camkeypad's encoder moves the manual focus seekbar, out of 1000. */
     private static final int CAMKEYPAD_FOCUS_STEP = 20;
+    /** The camera has to reopen for a new capture rate, so wait for the encoder to stop turning. */
+    private static final long CAMKEYPAD_RATE_DELAY_MS = 400;
+    private final Handler camkeypad_rate_handler = new Handler();
+    private boolean camkeypad_rate_pending;
+    private final Runnable camkeypad_rate_update = new Runnable() {
+        @Override
+        public void run() {
+            camkeypad_rate_pending = false;
+            main_activity.updateForSettings(true, "");
+        }
+    };
+
+    /** Steps the video capture rate through its supported values, stopping at normal speed: slow
+     *  motion changes the available video resolutions, so it stays in the app's own settings.
+     */
+    private void changeCamKeypadCaptureRate(int change) {
+        Preview preview = main_activity.getPreview();
+        if( !preview.isVideo() || preview.isVideoRecording() || preview.getCameraController() == null )
+            return;
+        MyApplicationInterface applicationInterface = main_activity.getApplicationInterface();
+        List<Float> rates = applicationInterface.getSupportedVideoCaptureRates();
+        int index = rates.indexOf(applicationInterface.getVideoCaptureRateFactor()) + change;
+        if( index < 0 || index >= rates.size() || rates.get(index) < 1.0f )
+            return;
+        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(main_activity).edit();
+        editor.putFloat(PreferenceKeys.getVideoCaptureRatePreferenceKey(preview.getCameraId(), applicationInterface.getCameraIdSPhysicalPref()), rates.get(index));
+        editor.apply();
+        camkeypad_rate_pending = true;
+        camkeypad_rate_handler.removeCallbacks(camkeypad_rate_update);
+        camkeypad_rate_handler.postDelayed(camkeypad_rate_update, CAMKEYPAD_RATE_DELAY_MS);
+    }
 
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if( MyDebug.LOG )
@@ -2679,10 +2710,23 @@ public class MainUI {
                 main_activity.zoomOut();
                 return true;
             }
+            case KeyEvent.KEYCODE_LEFT_BRACKET: // camkeypad time-lapse rate slower
+            case KeyEvent.KEYCODE_RIGHT_BRACKET: // camkeypad time-lapse rate faster
+            {
+                changeCamKeypadCaptureRate(keyCode == KeyEvent.KEYCODE_RIGHT_BRACKET ? 1 : -1);
+                return true;
+            }
             case KeyEvent.KEYCODE_R: // camkeypad start/stop
             {
                 if( event.getRepeatCount() == 0 ) {
-                    main_activity.takePicture(false);
+                    // the camera hasn't picked up a new rate yet, so recording now would use the old one
+                    if( camkeypad_rate_pending ) {
+                        camkeypad_rate_handler.removeCallbacks(camkeypad_rate_update);
+                        camkeypad_rate_update.run();
+                    }
+                    else {
+                        main_activity.takePicture(false);
+                    }
                 }
                 return true;
             }

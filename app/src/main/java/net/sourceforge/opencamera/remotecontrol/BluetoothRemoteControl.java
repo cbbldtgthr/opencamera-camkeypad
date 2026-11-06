@@ -311,12 +311,14 @@ public class BluetoothRemoteControl {
         int exposure_tenths = Math.round(preview.getCurrentExposure() * preview.getExposureStep() * 10.0f);
         int exposure_locked = preview.isExposureLocked() ? 1 : 0;
 
-        int summary = java.util.Arrays.hashCode(new int[]{state, mode, focus, focus_distance_cm, exposure_tenths, exposure_locked});
+        int capture_rate_tenths = preview.getCameraController() == null ? 10 : Math.round(main_activity.getApplicationInterface().getVideoCaptureRateFactor() * 10.0f);
+
+        int summary = java.util.Arrays.hashCode(new int[]{state, mode, focus, focus_distance_cm, exposure_tenths, exposure_locked, capture_rate_tenths});
         long now = System.currentTimeMillis();
         if( summary == camkeypad_sent_summary && now - camkeypad_sent_time < CamKeypadProtocol.HEARTBEAT_MS )
             return;
         // if the write fails (e.g., stack busy), we leave the sent state alone so the next tick retries
-        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms, mode, getPhoneBattery(), focus, focus_distance_cm, exposure_tenths, exposure_locked)) ) {
+        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms, mode, getPhoneBattery(), focus, focus_distance_cm, exposure_tenths, exposure_locked, capture_rate_tenths)) ) {
             camkeypad_sent_summary = summary;
             camkeypad_sent_time = now;
         }
