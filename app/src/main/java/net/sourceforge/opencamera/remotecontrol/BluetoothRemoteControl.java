@@ -22,6 +22,7 @@ import androidx.annotation.RequiresApi;
 import net.sourceforge.opencamera.MainActivity;
 import net.sourceforge.opencamera.MyApplicationInterface;
 import net.sourceforge.opencamera.MyDebug;
+import net.sourceforge.opencamera.StorageUtils;
 import net.sourceforge.opencamera.PreferenceKeys;
 import net.sourceforge.opencamera.preview.Preview;
 import net.sourceforge.opencamera.ui.MainUI;
@@ -313,15 +314,32 @@ public class BluetoothRemoteControl {
 
         int capture_rate_tenths = preview.getCameraController() == null ? 10 : Math.round(main_activity.getApplicationInterface().getVideoCaptureRateFactor() * 10.0f);
 
-        int summary = java.util.Arrays.hashCode(new int[]{state, mode, focus, focus_distance_cm, exposure_tenths, exposure_locked, capture_rate_tenths});
+        String project = getProject();
+
+        int summary = java.util.Arrays.hashCode(new int[]{state, mode, focus, focus_distance_cm, exposure_tenths, exposure_locked, capture_rate_tenths, project.hashCode()});
         long now = System.currentTimeMillis();
         if( summary == camkeypad_sent_summary && now - camkeypad_sent_time < CamKeypadProtocol.HEARTBEAT_MS )
             return;
         // if the write fails (e.g., stack busy), we leave the sent state alone so the next tick retries
-        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms, mode, getPhoneBattery(), focus, focus_distance_cm, exposure_tenths, exposure_locked, capture_rate_tenths)) ) {
+        if( bluetoothLeService.writeCamKeypadStatus(CamKeypadProtocol.encodeStatus(state, elapsed_ms, mode, getPhoneBattery(), focus, focus_distance_cm, exposure_tenths, exposure_locked, capture_rate_tenths, project)) ) {
             camkeypad_sent_summary = summary;
             camkeypad_sent_time = now;
         }
+    }
+
+    /** Returns the last folder of the save location, which names the project, or "" if unknown. */
+    private String getProject() {
+        StorageUtils storageUtils = main_activity.getStorageUtils();
+        String path = storageUtils.getImageFolderPath();
+        if( path == null && storageUtils.isUsingSAF() ) {
+            // a tree uri's last segment is e.g. "primary:DCIM/OpenCamera/wedding"
+            path = storageUtils.getTreeUriSAF().getLastPathSegment();
+        }
+        if( path == null )
+            return "";
+        while( path.endsWith("/") )
+            path = path.substring(0, path.length()-1);
+        return path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf(':')) + 1);
     }
 
     /** Returns the manual focus distance in centimetres, or CamKeypadProtocol.FOCUS_DISTANCE_CM_INFINITY. */

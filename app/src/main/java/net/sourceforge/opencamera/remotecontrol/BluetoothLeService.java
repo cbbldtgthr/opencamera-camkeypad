@@ -50,6 +50,9 @@ public class BluetoothLeService extends Service {
     private final List<BluetoothGattCharacteristic> charsToSubscribe = new ArrayList<>();
     // camkeypad: characteristic we write recording status to, set once services are discovered
     private volatile BluetoothGattCharacteristic camkeypad_status_char;
+    // the ATT MTU agreed with camkeypad; 23 until requestMtu() succeeds
+    private static final int DEFAULT_ATT_MTU = 23;
+    private volatile int camkeypad_mtu = DEFAULT_ATT_MTU;
 
     private double currentTemp = -1;
     private double currentDepth = -1;
@@ -166,6 +169,7 @@ public class BluetoothLeService extends Service {
                 if( MyDebug.LOG )
                     Log.d(TAG, "Disconnected from GATT server, reattempting every 5 seconds.");
                 camkeypad_status_char = null;
+                camkeypad_mtu = DEFAULT_ATT_MTU;
                 broadcastUpdate(intentAction);
                 attemptReconnect();
             }
@@ -199,6 +203,14 @@ public class BluetoothLeService extends Service {
                 if( MyDebug.LOG )
                     Log.d(TAG, "onServicesDiscovered received: " + status);
             }
+        }
+
+        @Override
+        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            if( MyDebug.LOG )
+                Log.d(TAG, "onMtuChanged: " + mtu + " status: " + status);
+            if( status == BluetoothGatt.GATT_SUCCESS )
+                camkeypad_mtu = mtu;
         }
 
         @Override
@@ -240,8 +252,14 @@ public class BluetoothLeService extends Service {
             camkeypad_status_char = service == null ? null : service.getCharacteristic(CamKeypadProtocol.STATUS_CHAR_UUID);
             if( camkeypad_status_char == null )
                 Log.e(TAG, "camkeypad status characteristic not found");
-            else if( MyDebug.LOG )
-                Log.d(TAG, "Found camkeypad status characteristic");
+            else {
+                if( MyDebug.LOG )
+                    Log.d(TAG, "Found camkeypad status characteristic");
+                // status outgrows the default 20-byte write, so writes wait until this succeeds
+                camkeypad_mtu = DEFAULT_ATT_MTU;
+                if( ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED )
+                    bluetoothGatt.requestMtu(CamKeypadProtocol.ATT_MTU);
+            }
             return;
         }
 
@@ -556,6 +574,9 @@ public class BluetoothLeService extends Service {
         BluetoothGattCharacteristic characteristic = camkeypad_status_char;
         BluetoothGatt gatt = bluetoothGatt;
         if( characteristic == null || gatt == null )
+            return false;
+        // an ATT write carries the MTU less 3 bytes of header
+        if( value.length > camkeypad_mtu - 3 )
             return false;
 
         // Check for Android 12 Bluetooth permission just in case (and for Android lint error)
